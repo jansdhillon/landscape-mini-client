@@ -1,3 +1,4 @@
+import re
 import subprocess
 from typing import Literal
 
@@ -32,7 +33,17 @@ class MultipassInstance:
 
         res = subprocess.run(cmd, check=True, capture_output=True, text=True)
 
-        self.name = res.stdout.split("Launched:")[1].strip()
+        self.name = re.sub(r"[^a-z-]", "", res.stdout.split("Launched:")[1].strip())
+
+        # Push SSH key
+
+        # subprocess.run(
+        #     [
+        #         f"multipass transfer ~/.ssh/id_rsa {self.name}:/home/ubuntu/.ssh/id_rsa",
+        #         f"multipass transfer ~/.ssh/id_rsa.pub {self.name}:/home/ubuntu/.ssh/id_rsa.pub",
+        #     ],
+        #     check=True,
+        # )
 
     def __repr__(self) -> str:
         """Return string representation of instance configuration"""
@@ -57,15 +68,46 @@ class MultipassInstance:
                 return line.split(":")[1].strip()
         return None
 
-    def exec(self, cmd: str) -> str:
-
+    def exec(self, cmd: str, _print=True) -> str | None:
+        """Run a single command inside Multipass"""
         cmd_list = ["multipass", "exec", "-n", self.name, "--", "sh", "-c", cmd]
 
         res = subprocess.run(cmd_list, check=True, capture_output=True, text=True)
 
-        return res.stdout.strip()
+        output = res.stdout.strip()
+        if _print:
+            print(output)
+        return output
+
+    def execl(self, cmds: list[str], _print=True) -> str | None:
+        """Run a list of commands inside Multipass"""
+
+        full_cmd = " && ".join(cmds)
+
+        cmd_list = ["multipass", "exec", "-n", self.name, "--", "sh", "-c", full_cmd]
+
+        res = subprocess.run(cmd_list, check=True, capture_output=True, text=True)
+
+        output = res.stdout.strip()
+        if _print:
+            print(output)
+        return output
 
 
+gh_username = "jansdhillon"
 instance = MultipassInstance()
 print(instance)
-print(instance.exec("echo hello"))
+instance.execl(
+    [
+        f"git clone https://github.com/{gh_username}/landscape-mini-client.git",
+        "cd landscape-mini-client",
+        "python3 -m venv ./venv",
+        ". ./venv/bin/activate",
+        "pip install -r ./requirements.txt",
+        # "python -m src.landscape_mini_client register \
+        # --account-name=standalone \
+        # --computer-title=mini-client \
+        # --server-host=localhost \
+        # --port=8080",
+    ]
+)
